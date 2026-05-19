@@ -1,14 +1,13 @@
 using System;
 using System.Windows.Forms;
 using System.Drawing;
-using System.ComponentModel;
-using Kursach.Models;
+using System.Data;
 
 namespace Kursach
 {
     public class Form1 : Form
     {
-        private BindingList<Product> _products = new BindingList<Product>();
+        private DataTable _productsTable = new DataTable();
         private DataGridView dgvProducts;
 
         private Button btnDelivery;
@@ -21,22 +20,25 @@ namespace Kursach
             this.Text = "Магазин - Кассовый Апарат";
             this.Size = new Size(800, 600);
             this.StartPosition = FormStartPosition.CenterScreen;
-
             this.MaximizeBox = true; 
 
-            _products.Add(new Product { Name = "Хлеб", Unit = "шт", Price = 15.50m, Quantity = 20, LastDelivery = DateTime.Now });
-            _products.Add(new Product { Name = "Молоко", Unit = "л", Price = 34.00m, Quantity = 10, LastDelivery = DateTime.Now });
-            _products.Add(new Product { Name = "Колбаса", Unit = "кг", Price = 180.00m, Quantity = 5, LastDelivery = DateTime.Now.AddDays(-2) });
+            _productsTable.Columns.Add("Наименование", typeof(string));
+            _productsTable.Columns.Add("Ед. измерения", typeof(string));
+            _productsTable.Columns.Add("Цена за ед.", typeof(decimal));
+            _productsTable.Columns.Add("Количество", typeof(int));
+            _productsTable.Columns.Add("Дата закупки", typeof(DateTime));
+
+            _productsTable.Rows.Add("Хлеб", "шт", 15.50m, 20, DateTime.Now);
+            _productsTable.Rows.Add("Молоко", "л", 34.00m, 10, DateTime.Now);
+            _productsTable.Rows.Add("Колбаса", "кг", 180.00m, 5, DateTime.Now.AddDays(-2));
 
             dgvProducts = new DataGridView();
             dgvProducts.Location = new Point(20, 20);
             dgvProducts.Size = new Size(740, 400);
             dgvProducts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvProducts.ReadOnly = true;
-            dgvProducts.DataSource = _products;
-
+            dgvProducts.DataSource = _productsTable;
             dgvProducts.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            
             this.Controls.Add(dgvProducts);
 
             btnDelivery = new Button();
