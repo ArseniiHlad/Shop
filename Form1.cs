@@ -1,14 +1,14 @@
 using System;
 using System.Windows.Forms;
 using System.Drawing;
-using System.Collections.Generic;
+using System.ComponentModel;
 using Kursach.Models;
 
 namespace Kursach
 {
     public class Form1 : Form
     {
-        private List<Product> _products = new List<Product>();
+        private BindingList<Product> _products = new BindingList<Product>();
         private DataGridView dgvProducts;
 
         private Button btnDelivery;
@@ -22,6 +22,8 @@ namespace Kursach
             this.Size = new Size(800, 600);
             this.StartPosition = FormStartPosition.CenterScreen;
 
+            this.MaximizeBox = true; 
+
             _products.Add(new Product { Name = "Хлеб", Unit = "шт", Price = 15.50m, Quantity = 20, LastDelivery = DateTime.Now });
             _products.Add(new Product { Name = "Молоко", Unit = "л", Price = 34.00m, Quantity = 10, LastDelivery = DateTime.Now });
             _products.Add(new Product { Name = "Колбаса", Unit = "кг", Price = 180.00m, Quantity = 5, LastDelivery = DateTime.Now.AddDays(-2) });
@@ -32,24 +34,30 @@ namespace Kursach
             dgvProducts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvProducts.ReadOnly = true;
             dgvProducts.DataSource = _products;
+
+            dgvProducts.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            
             this.Controls.Add(dgvProducts);
 
             btnDelivery = new Button();
             btnDelivery.Text = "Поступление товара";
             btnDelivery.Location = new Point(20, 440);
             btnDelivery.Size = new Size(160, 40);
+            btnDelivery.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             this.Controls.Add(btnDelivery);
 
             btnSale = new Button();
             btnSale.Text = "Оформить продажу";
             btnSale.Location = new Point(200, 440);
             btnSale.Size = new Size(160, 40);
+            btnSale.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             this.Controls.Add(btnSale);
 
             btnUcenka = new Button();
             btnUcenka.Text = "Уценка / Списание";
             btnUcenka.Location = new Point(380, 440);
             btnUcenka.Size = new Size(160, 40);
+            btnUcenka.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             this.Controls.Add(btnUcenka);
 
             btnInventory = new Button();
@@ -57,6 +65,7 @@ namespace Kursach
             btnInventory.Location = new Point(560, 440);
             btnInventory.Size = new Size(200, 40);
             btnInventory.BackColor = Color.LightGreen;
+            btnInventory.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             this.Controls.Add(btnInventory);
         }
     }
