@@ -9,12 +9,16 @@ namespace Kursach
     public class Form1 : Form
     {
         private List<Product> _products = new List<Product>();
-        
         private DataGridView dgvProducts;
+
+        private Button btnDelivery;
+        private Button btnSale;
+        private Button btnUcenka;
+        private Button btnInventory;
 
         public Form1()
         {
-            this.Text = "Магазин - Кассовый Аппарат";
+            this.Text = "Магазин - Кассовый Апарат";
             this.Size = new Size(800, 600);
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -27,10 +31,33 @@ namespace Kursach
             dgvProducts.Size = new Size(740, 400);
             dgvProducts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvProducts.ReadOnly = true;
-
             dgvProducts.DataSource = _products;
-
             this.Controls.Add(dgvProducts);
+
+            btnDelivery = new Button();
+            btnDelivery.Text = "Поступление товара";
+            btnDelivery.Location = new Point(20, 440);
+            btnDelivery.Size = new Size(160, 40);
+            this.Controls.Add(btnDelivery);
+
+            btnSale = new Button();
+            btnSale.Text = "Оформить продажу";
+            btnSale.Location = new Point(200, 440);
+            btnSale.Size = new Size(160, 40);
+            this.Controls.Add(btnSale);
+
+            btnUcenka = new Button();
+            btnUcenka.Text = "Уценка / Списание";
+            btnUcenka.Location = new Point(380, 440);
+            btnUcenka.Size = new Size(160, 40);
+            this.Controls.Add(btnUcenka);
+
+            btnInventory = new Button();
+            btnInventory.Text = "Инвентаризация";
+            btnInventory.Location = new Point(560, 440);
+            btnInventory.Size = new Size(200, 40);
+            btnInventory.BackColor = Color.LightGreen;
+            this.Controls.Add(btnInventory);
         }
     }
 }
