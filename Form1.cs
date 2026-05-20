@@ -93,9 +93,23 @@ namespace Kursach
                 var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
                 if (selectedProduct != null)
                 {
-                    selectedProduct.Price = Math.Round(selectedProduct.Price * 0.85m, 2);
-                    dgvProducts.Refresh();
-                    MessageBox.Show($"Товар {selectedProduct.Name} уценен на 15%!", "Успех");
+                    DialogResult result = MessageBox.Show(
+                        $"Вы хотите уценить товар на 15%?\n(Нажмите 'Да' для уценки, 'Нет' для полного списания товара)", 
+                        "Выбор действия", 
+                        MessageBoxButtons.YesNoCancel
+                    );
+
+                    if (result == DialogResult.Yes)
+                    {
+                        selectedProduct.Price = Math.Round(selectedProduct.Price * 0.85m, 2);
+                        dgvProducts.Refresh();
+                    }
+                    else if (result == DialogResult.No)
+                    {
+                        _products.Remove(selectedProduct);
+                        dgvProducts.DataSource = null;
+                        dgvProducts.DataSource = _products;
+                    }
                 }
             }
             else
