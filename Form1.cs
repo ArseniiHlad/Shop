@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Collections.Generic;
+using System.IO;
 using Kursach.Models;
 
 namespace Kursach
@@ -45,6 +46,7 @@ namespace Kursach
             btnDelivery.Location = new Point(20, 440);
             btnDelivery.Size = new Size(160, 40);
             btnDelivery.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            btnDelivery.Click += BtnDelivery_Click;
             this.Controls.Add(btnDelivery);
 
             btnSale = new Button();
@@ -52,6 +54,7 @@ namespace Kursach
             btnSale.Location = new Point(200, 440);
             btnSale.Size = new Size(160, 40);
             btnSale.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            btnSale.Click += BtnSale_Click;
             this.Controls.Add(btnSale);
 
             btnUcenka = new Button();
@@ -116,6 +119,103 @@ namespace Kursach
             {
                 MessageBox.Show("Выберите товар в таблице!", "Внимание");
             }
+        }
+
+        private void BtnDelivery_Click(object sender, EventArgs e)
+        {
+            string name = PromptDialog.ShowDialog("Введите наименование товара:", "Поступление");
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            string qtyStr = PromptDialog.ShowDialog("Введите количество:", "Поступление");
+            if (!int.TryParse(qtyStr, out int qty) || qty <= 0) return;
+
+            var existingProduct = _products.Find(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (existingProduct != null)
+            {
+                existingProduct.Quantity += qty;
+                existingProduct.LastDelivery = DateTime.Now;
+            }
+            else
+            {
+                string unit = PromptDialog.ShowDialog("Введите единицу измерения (шт/л/кг):", "Новый товар");
+                string priceStr = PromptDialog.ShowDialog("Введите цену:", "Новый товар");
+                if (!decimal.TryParse(priceStr, out decimal price) || price <= 0) return;
+
+                _products.Add(new Product { Name = name, Unit = unit, Price = price, Quantity = qty, LastDelivery = DateTime.Now });
+            }
+
+            dgvProducts.DataSource = null;
+            dgvProducts.DataSource = _products;
+            MessageBox.Show("Склад обновлен!", "Успех");
+        }
+
+        private void BtnSale_Click(object sender, EventArgs e)
+        {
+            if (dgvProducts.SelectedRows.Count > 0)
+            {
+                var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
+                if (selectedProduct != null)
+                {
+                    string qtyStr = PromptDialog.ShowDialog($"Сколько единиц товара '{selectedProduct.Name}' продать?", "Продажа");
+                    if (!int.TryParse(qtyStr, out int qty) || qty <= 0) return;
+
+                    if (qty > selectedProduct.Quantity)
+                    {
+                        MessageBox.Show("Недостаточно товара на складе!", "Ошибка");
+                        return;
+                    }
+
+                    selectedProduct.Quantity -= qty;
+                    decimal totalSalePrice = selectedProduct.Price * qty;
+                    dgvProducts.Refresh();
+
+                    string checkPath = "check.txt";
+                    using (StreamWriter writer = new StreamWriter(checkPath, false))
+                    {
+                        writer.WriteLine("====== ФИСКАЛЬНЫЙ ЧЕК ======");
+                        writer.WriteLine($"Дата: {DateTime.Now}");
+                        writer.WriteLine($"Товар: {selectedProduct.Name}");
+                        writer.WriteLine($"Количество: {qty} {selectedProduct.Unit}");
+                        writer.WriteLine($"Цена за ед.: {selectedProduct.Price:C}");
+                        writer.WriteLine("----------------------------");
+                        writer.WriteLine($"ИТОГО К ОПЛАТЕ: {totalSalePrice:C}");
+                        writer.WriteLine("============================");
+                    }
+
+                    MessageBox.Show($"Продано! Чек сохранен в файл check.txt\nСумма: {totalSalePrice:C}", "Успешно");
+                }
+            }
+            else
+            {
+                MessageBox.Show("Выберите товар в таблице для продажи!", "Внимание");
+            }
+        }
+    }
+
+    public static class PromptDialog
+    {
+        public static string ShowDialog(string text, string caption)
+        {
+            Form prompt = new Form()
+            {
+                Width = 400,
+                Height = 180,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                Text = caption,
+                StartPosition = FormStartPosition.CenterScreen,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+            Label textLabel = new Label() { Left = 20, Top = 20, Text = text, Width = 350 };
+            TextBox textBox = new TextBox() { Left = 20, Top = 50, Width = 350 };
+            Button confirmation = new Button() { Text = "ОК", Left = 270, Width = 100, Top = 85, DialogResult = DialogResult.OK };
+            confirmation.Click += (sender, e) => { prompt.Close(); };
+            prompt.Controls.Add(textBox);
+            prompt.Controls.Add(confirmation);
+            prompt.Controls.Add(textLabel);
+            prompt.AcceptButton = confirmation;
+
+            return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
         }
     }
 }
