@@ -10,6 +10,7 @@ namespace Kursach
     public class Form1 : Form
     {
         private List<Product> _products = new List<Product>();
+        private List<Product> _cart = new List<Product>();
         private DataGridView dgvProducts;
 
         private Button btnDelivery;
@@ -156,33 +157,71 @@ namespace Kursach
                 var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
                 if (selectedProduct != null)
                 {
-                    string qtyStr = PromptDialog.ShowDialog($"Сколько единиц товара '{selectedProduct.Name}' продать?", "Продажа");
+                    string qtyStr = PromptDialog.ShowDialog($"Сколько единиц товара '{selectedProduct.Name}' добавить в чек?", "Продажа");
                     if (!int.TryParse(qtyStr, out int qty) || qty <= 0) return;
 
-                    if (qty > selectedProduct.Quantity)
+                    int alreadyInCart = 0;
+                    var inCartProd = _cart.Find(p => p.Name == selectedProduct.Name);
+                    if (inCartProd != null) alreadyInCart = inCartProd.Quantity;
+
+                    if (qty + alreadyInCart > selectedProduct.Quantity)
                     {
-                        MessageBox.Show("Недостаточно товара на складе!", "Ошибка");
+                        MessageBox.Show("Недостаточно товара на складе с учетом корзины!", "Ошибка");
                         return;
                     }
 
-                    selectedProduct.Quantity -= qty;
-                    decimal totalSalePrice = selectedProduct.Price * qty;
-                    dgvProducts.Refresh();
-
-                    string checkPath = "check.txt";
-                    using (StreamWriter writer = new StreamWriter(checkPath, false))
+                    if (inCartProd != null)
                     {
-                        writer.WriteLine("====== ФИСКАЛЬНЫЙ ЧЕК ======");
-                        writer.WriteLine($"Дата: {DateTime.Now}");
-                        writer.WriteLine($"Товар: {selectedProduct.Name}");
-                        writer.WriteLine($"Количество: {qty} {selectedProduct.Unit}");
-                        writer.WriteLine($"Цена за ед.: {selectedProduct.Price:C}");
-                        writer.WriteLine("----------------------------");
-                        writer.WriteLine($"ИТОГО К ОПЛАТЕ: {totalSalePrice:C}");
-                        writer.WriteLine("============================");
+                        inCartProd.Quantity += qty;
+                    }
+                    else
+                    {
+                        _cart.Add(new Product 
+                        { 
+                            Name = selectedProduct.Name, 
+                            Unit = selectedProduct.Unit, 
+                            Price = selectedProduct.Price, 
+                            Quantity = qty 
+                        });
                     }
 
-                    MessageBox.Show($"Продано! Чек сохранен в файл check.txt\nСумма: {totalSalePrice:C}", "Успешно");
+                    DialogResult result = MessageBox.Show(
+                        "Товар добавлен в чек. Хотите добавить еще один товар?\n(Нажмите 'Да' для продолжения выбора, 'Нет' для закрытия чека)", 
+                        "Кассовый аппарат", 
+                        MessageBoxButtons.YesNo
+                    );
+
+                    if (result == DialogResult.No)
+                    {
+                        decimal totalCheckPrice = 0;
+                        string checkPath = "check.txt";
+
+                        using (StreamWriter writer = new StreamWriter(checkPath, false))
+                        {
+                            writer.WriteLine("====== ФИСКАЛЬНЫЙ ЧЕК ======");
+                            writer.WriteLine($"Дата: {DateTime.Now}");
+                            writer.WriteLine("----------------------------");
+
+                            foreach (var item in _cart)
+                            {
+                                var stockProd = _products.Find(p => p.Name == item.Name);
+                                if (stockProd != null) stockProd.Quantity -= item.Quantity;
+
+                                decimal itemTotal = item.Price * item.Quantity;
+                                totalCheckPrice += itemTotal;
+
+                                writer.WriteLine($"{item.Name} - {item.Quantity} {item.Unit} x {item.Price:C} = {itemTotal:C}");
+                            }
+
+                            writer.WriteLine("----------------------------");
+                            writer.WriteLine($"ИТОГО К ОПЛАТЕ: {totalCheckPrice:C}");
+                            writer.WriteLine("============================");
+                        }
+
+                        _cart.Clear();
+                        dgvProducts.Refresh();
+                        MessageBox.Show($"Продажа оформлена! Чек сохранен в файл check.txt\nОбщая сумма: {totalCheckPrice:C}", "Успешно");
+                    }
                 }
             }
             else
