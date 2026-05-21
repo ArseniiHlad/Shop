@@ -129,7 +129,7 @@ namespace Kursach
             string qtyStr = PromptDialog.ShowDialog("Введите количество:", "Поступление");
             if (!int.TryParse(qtyStr, out int qty) || qty <= 0) return;
 
-            var existingProduct = _products.Find(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var existingProduct = _products.Find(p => p.Name != null && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existingProduct != null)
             {
                 existingProduct.Quantity += qty;
@@ -215,7 +215,7 @@ namespace Kursach
             prompt.Controls.Add(textLabel);
             prompt.AcceptButton = confirmation;
 
-            return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
+            return prompt.ShowDialog() == DialogResult.OK ? (textBox.Text ?? string.Empty) : string.Empty;
         }
     }
 }
