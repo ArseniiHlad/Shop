@@ -25,9 +25,10 @@ namespace Kursach
             this.StartPosition = FormStartPosition.CenterScreen;
             this.MaximizeBox = true;
 
-            _products.Add(new Product { Name = "Хлеб", Unit = "шт", Price = 15.50m, Quantity = 20, LastDelivery = DateTime.Now });
-            _products.Add(new Product { Name = "Молоко", Unit = "л", Price = 34.00m, Quantity = 10, LastDelivery = DateTime.Now });
-            _products.Add(new Product { Name = "Колбаса", Unit = "кг", Price = 180.00m, Quantity = 5, LastDelivery = DateTime.Now.AddDays(-2) });
+            // Теперь создаем объекты через каноничный конструктор
+            _products.Add(new Product("Хлеб", "шт", 15.50m, 20, DateTime.Now));
+            _products.Add(new Product("Молоко", "л", 34.00m, 10, DateTime.Now));
+            _products.Add(new Product("Колбаса", "кг", 180.00m, 5, DateTime.Now.AddDays(-2)));
 
             dgvProducts = new DataGridView();
             dgvProducts.Location = new Point(20, 20);
@@ -105,7 +106,8 @@ namespace Kursach
 
                     if (result == DialogResult.Yes)
                     {
-                        selectedProduct.Price = Math.Round(selectedProduct.Price * 0.85m, 2);
+                        // Используем метод объекта вместо ручного изменения свойства
+                        selectedProduct.ApplyDiscount(15);
                         dgvProducts.Refresh();
                     }
                     else if (result == DialogResult.No)
@@ -133,8 +135,8 @@ namespace Kursach
             var existingProduct = _products.Find(p => p.Name != null && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existingProduct != null)
             {
-                existingProduct.Quantity += qty;
-                existingProduct.LastDelivery = DateTime.Now;
+                // Используем метод объекта
+                existingProduct.AddStock(qty);
             }
             else
             {
@@ -142,7 +144,8 @@ namespace Kursach
                 string priceStr = PromptDialog.ShowDialog("Введите цену:", "Новый товар");
                 if (!decimal.TryParse(priceStr, out decimal price) || price <= 0) return;
 
-                _products.Add(new Product { Name = name, Unit = unit, Price = price, Quantity = qty, LastDelivery = DateTime.Now });
+                // Используем конструктор
+                _products.Add(new Product(name, unit, price, qty, DateTime.Now));
             }
 
             dgvProducts.DataSource = null;
@@ -172,17 +175,12 @@ namespace Kursach
 
                     if (inCartProd != null)
                     {
-                        inCartProd.Quantity += qty;
+                        inCartProd.AddStock(qty);
                     }
                     else
                     {
-                        _cart.Add(new Product 
-                        { 
-                            Name = selectedProduct.Name, 
-                            Unit = selectedProduct.Unit, 
-                            Price = selectedProduct.Price, 
-                            Quantity = qty 
-                        });
+                        // Используем специальный метод клонирования для корзины
+                        _cart.Add(selectedProduct.CloneForCart(qty));
                     }
 
                     DialogResult result = MessageBox.Show(
@@ -205,7 +203,11 @@ namespace Kursach
                             foreach (var item in _cart)
                             {
                                 var stockProd = _products.Find(p => p.Name == item.Name);
-                                if (stockProd != null) stockProd.Quantity -= item.Quantity;
+                                if (stockProd != null)
+                                {
+                                    // Объект сам уменьшает свое количество, проверяя валидность операции
+                                    stockProd.TrySell(item.Quantity);
+                                }
 
                                 decimal itemTotal = item.Price * item.Quantity;
                                 totalCheckPrice += itemTotal;
