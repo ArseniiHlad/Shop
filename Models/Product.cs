@@ -4,44 +4,63 @@ namespace Kursach.Models
 {
     public class Product
     {
-        public string Name { get; private set; }
-        public string Unit { get; private set; }
-        public decimal Price { get; private set; }
-        public int Quantity { get; private set; }
-        public DateTime LastDelivery { get; private set; }
+        public string Article { get; set; } = null!;
+        public string Name { get; set; } = null!;
+        public string Type { get; set; } = null!;
+        public string Provider { get; set; } = null!;
+        public string Unit { get; set; } = null!;
+        public decimal Price { get; set; }
+        public int Quantity { get; set; }
+        public DateTime LastDelivery { get; set; }
+        public bool IsEligibleForDiscount { get; set; }
 
-        public Product(string name, string unit, decimal price, int quantity, DateTime lastDelivery)
+        public Product(string article, string name, string type, string provider, string unit, decimal price, int quantity, DateTime lastDelivery, bool discount)
         {
-            Name = name ?? throw new ArgumentNullException(nameof(name));
-            Unit = unit ?? throw new ArgumentNullException(nameof(unit));
-            Price = price >= 0 ? price : throw new ArgumentException("Цена не может быть отрицательной");
-            Quantity = quantity >= 0 ? quantity : throw new ArgumentException("Количество не может быть отрицательным");
+            Article = article;
+            Name = name;
+            Type = type;
+            Provider = provider;
+            Unit = unit;
+            Price = price;
+            Quantity = quantity;
             LastDelivery = lastDelivery;
+            IsEligibleForDiscount = discount;
         }
 
         public void ApplyDiscount(decimal percentage)
         {
-            if (percentage <= 0 || percentage >= 100) return;
-            Price = Math.Round(Price * (1 - percentage / 100m), 2);
-        }
-
-        public bool TrySell(int qty)
-        {
-            if (qty <= 0 || qty > Quantity) return false;
-            Quantity -= qty;
-            return true;
+            Price = Math.Round(Price * (1 - percentage / 100), 2);
         }
 
         public void AddStock(int qty)
         {
-            if (qty <= 0) return;
             Quantity += qty;
             LastDelivery = DateTime.Now;
         }
 
+        public bool TrySell(int qty)
+        {
+            if (Quantity >= qty)
+            {
+                Quantity -= qty;
+                return true;
+            }
+            return false;
+        }
+
         public Product CloneForCart(int qty)
         {
-            return new Product(Name, Unit, Price, qty, LastDelivery);
+            return new Product(
+                this.Article, 
+                this.Name, 
+                this.Type, 
+                this.Provider, 
+                this.Unit, 
+                this.Price, 
+                qty,
+                this.LastDelivery, 
+                this.IsEligibleForDiscount
+            );
         }
     }
 }

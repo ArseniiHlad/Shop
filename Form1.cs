@@ -1,235 +1,326 @@
 using System;
-using System.Windows.Forms;
-using System.Drawing;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Drawing;
 using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Windows.Forms;
 using Kursach.Models;
 
 namespace Kursach
 {
-    public class Form1 : Form
+    public partial class Form1 : Form
     {
-        private List<Product> _products = new List<Product>();
-        private List<Product> _cart = new List<Product>();
-        private DataGridView dgvProducts;
+        private List<Product> _products = null!;
+        private List<Product> _cart = null!; 
+        private BindingSource _bindingSource = null!;
+        private Dictionary<string, bool> _sortDirections = null!;
+        private Random _random = new Random();
 
-        private Button btnDelivery;
-        private Button btnSale;
-        private Button btnUcenka;
-        private Button btnInventory;
+        private DataGridView dgvProducts = null!;
+        private TextBox txtSearch = null!;
+        private Label lblSearch = null!;
+        private Button btnAddNewProduct = null!;
+        private Button btnSellProduct = null!;
+        private Button btnDiscountOrDelete = null!; 
+        private Button btnInventory = null!;        
 
         public Form1()
         {
-            this.Text = "Магазин - Кассовый Апарат";
-            this.Size = new Size(800, 600);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.MaximizeBox = true;
+            InitializeComponent();
+            LoadInitialData();
+            InitializeAdvancedLogic();
+        }
 
-            // Теперь создаем объекты через каноничный конструктор
-            _products.Add(new Product("Хлеб", "шт", 15.50m, 20, DateTime.Now));
-            _products.Add(new Product("Молоко", "л", 34.00m, 10, DateTime.Now));
-            _products.Add(new Product("Колбаса", "кг", 180.00m, 5, DateTime.Now.AddDays(-2)));
+        private void LoadInitialData()
+        {
+            _products = new List<Product>
+            {
+                new Product("ART-1054", "Хліб", "Їжа", "Хлібзавод №3", "шт", 24.50m, 50, DateTime.Now, false),
+                new Product("ART-8841", "Молоко", "Їжа", "МолЗавод Харків", "пак", 38.00m, 20, DateTime.Now, false),
+                new Product("ART-3129", "Пральний порошок", "Хімія", "Procter&Gamble", "шт", 145.00m, 10, DateTime.Now, false)
+            };
+            _cart = new List<Product>();
+        }
 
-            dgvProducts = new DataGridView();
-            dgvProducts.Location = new Point(20, 20);
-            dgvProducts.Size = new Size(740, 400);
-            dgvProducts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvProducts.ReadOnly = true;
-            dgvProducts.DataSource = _products;
-            dgvProducts.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        private void InitializeAdvancedLogic()
+        {
+            _sortDirections = new Dictionary<string, bool>();
+            _bindingSource = new BindingSource();
+
+            _bindingSource.DataSource = _products;
+            dgvProducts.DataSource = _bindingSource;
+
+            dgvProducts.Columns["Article"].HeaderText = "Артикул";
+            dgvProducts.Columns["Name"].HeaderText = "Назва товару";
+            dgvProducts.Columns["Price"].HeaderText = "Ціна (грн)";
+            dgvProducts.Columns["Type"].HeaderText = "Категорія";
+            dgvProducts.Columns["Provider"].HeaderText = "Постачальник";
+            dgvProducts.Columns["Quantity"].HeaderText = "Кількість";
+            dgvProducts.Columns["Unit"].HeaderText = "Од. вим.";
             
-            dgvProducts.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvProducts.MultiSelect = false;
+            if (dgvProducts.Columns["LastDelivery"] != null) 
+                dgvProducts.Columns["LastDelivery"]!.HeaderText = "Остання поставка";
             
-            this.Controls.Add(dgvProducts);
+            if (dgvProducts.Columns["IsEligibleForDiscount"] != null)
+                dgvProducts.Columns["IsEligibleForDiscount"]!.Visible = false;
 
-            btnDelivery = new Button();
-            btnDelivery.Text = "Поступление товара";
-            btnDelivery.Location = new Point(20, 440);
-            btnDelivery.Size = new Size(160, 40);
-            btnDelivery.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            btnDelivery.Click += BtnDelivery_Click;
-            this.Controls.Add(btnDelivery);
-
-            btnSale = new Button();
-            btnSale.Text = "Оформить продажу";
-            btnSale.Location = new Point(200, 440);
-            btnSale.Size = new Size(160, 40);
-            btnSale.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            btnSale.Click += BtnSale_Click;
-            this.Controls.Add(btnSale);
-
-            btnUcenka = new Button();
-            btnUcenka.Text = "Уценка / Списание";
-            btnUcenka.Location = new Point(380, 440);
-            btnUcenka.Size = new Size(160, 40);
-            btnUcenka.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            btnUcenka.Click += BtnUcenka_Click;
-            this.Controls.Add(btnUcenka);
-
-            btnInventory = new Button();
-            btnInventory.Text = "Инвентаризация";
-            btnInventory.Location = new Point(560, 440);
-            btnInventory.Size = new Size(200, 40);
-            btnInventory.BackColor = Color.LightGreen;
-            btnInventory.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            txtSearch.TextChanged += TxtSearch_TextChanged;
+            dgvProducts.ColumnHeaderMouseClick += dgvProducts_ColumnHeaderMouseClick;
+            btnAddNewProduct.Click += BtnAddNewProduct_Click;
+            btnSellProduct.Click += BtnSellProduct_Click;
+            btnDiscountOrDelete.Click += BtnDiscountOrDelete_Click;
             btnInventory.Click += BtnInventory_Click;
-            this.Controls.Add(btnInventory);
         }
 
-        private void BtnInventory_Click(object sender, EventArgs e)
+        private void TxtSearch_TextChanged(object? sender, EventArgs e)
         {
-            decimal totalSum = 0;
-            int totalItems = 0;
-
-            foreach (var prod in _products)
+            string query = txtSearch.Text.Trim().ToLower();
+            if (string.IsNullOrEmpty(query))
             {
-                totalSum += prod.Price * prod.Quantity;
-                totalItems += prod.Quantity;
-            }
-
-            MessageBox.Show($"Всего товаров на складе: {totalItems} шт.\nОбщая стоимость: {totalSum:C}", "Отчет инвентаризации");
-        }
-
-        private void BtnUcenka_Click(object sender, EventArgs e)
-        {
-            if (dgvProducts.SelectedRows.Count > 0)
-            {
-                var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
-                if (selectedProduct != null)
-                {
-                    DialogResult result = MessageBox.Show(
-                        $"Вы хотите уценить товар на 15%?\n(Нажмите 'Да' для уценки, 'Нет' для полного списания товара)", 
-                        "Выбор действия", 
-                        MessageBoxButtons.YesNoCancel
-                    );
-
-                    if (result == DialogResult.Yes)
-                    {
-                        // Используем метод объекта вместо ручного изменения свойства
-                        selectedProduct.ApplyDiscount(15);
-                        dgvProducts.Refresh();
-                    }
-                    else if (result == DialogResult.No)
-                    {
-                        _products.Remove(selectedProduct);
-                        dgvProducts.DataSource = null;
-                        dgvProducts.DataSource = _products;
-                    }
-                }
+                _bindingSource.DataSource = _products;
             }
             else
             {
-                MessageBox.Show("Выберите товар в таблице!", "Внимание");
+                _bindingSource.DataSource = _products.Where(p =>
+                    (p.Name != null && p.Name.ToLower().Contains(query)) || 
+                    (p.Article != null && p.Article.ToLower().Contains(query)) ||
+                    (p.Type != null && p.Type.ToLower().Contains(query)) || 
+                    (p.Provider != null && p.Provider.ToLower().Contains(query))
+                ).ToList();
             }
+            _bindingSource.ResetBindings(false);
         }
 
-        private void BtnDelivery_Click(object sender, EventArgs e)
+        private void BtnAddNewProduct_Click(object? sender, EventArgs e)
         {
-            string name = PromptDialog.ShowDialog("Введите наименование товара:", "Поступление");
-            if (string.IsNullOrWhiteSpace(name)) return;
+            string name = PromptDialog.ShowDialog("Введіть назву нового товару:", "Додавання");
+            if (string.IsNullOrEmpty(name)) return;
 
-            string qtyStr = PromptDialog.ShowDialog("Введите количество:", "Поступление");
-            if (!int.TryParse(qtyStr, out int qty) || qty <= 0) return;
-
-            var existingProduct = _products.Find(p => p.Name != null && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            if (existingProduct != null)
+            string priceInput = PromptDialog.ShowDialog("Введіть ціну товару (грн):", "Ціна");
+            if (!decimal.TryParse(priceInput, out decimal price) || price <= 0)
             {
-                // Используем метод объекта
-                existingProduct.AddStock(qty);
-            }
-            else
-            {
-                string unit = PromptDialog.ShowDialog("Введите единицу измерения (шт/л/кг):", "Новый товар");
-                string priceStr = PromptDialog.ShowDialog("Введите цену:", "Новый товар");
-                if (!decimal.TryParse(priceStr, out decimal price) || price <= 0) return;
-
-                // Используем конструктор
-                _products.Add(new Product(name, unit, price, qty, DateTime.Now));
+                MessageBox.Show("Помилка введення! Ціна товару повинна бути числовим значенням більшим за нуль", "Помилка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
 
-            dgvProducts.DataSource = null;
-            dgvProducts.DataSource = _products;
-            MessageBox.Show("Склад обновлен!", "Успех");
+            string qtyInput = PromptDialog.ShowDialog("Введіть початкову кількість:", "Кількість");
+            if (!int.TryParse(qtyInput, out int qty) || qty < 0) qty = 0;
+
+            string articleInput = PromptDialog.ShowDialog("Введіть артикул (залиште порожнім для автогенерації):", "Артикул");
+            string finalArticle = string.IsNullOrWhiteSpace(articleInput) ? "ART-" + _random.Next(1000, 9999) : articleInput.Trim().ToUpper();
+            
+            string type = PromptDialog.ShowDialog("Введіть категорію (Їжа, Хімія):", "Категорія") ?? "Інше";
+            string provider = PromptDialog.ShowDialog("Введіть постачальника:", "Постачальник") ?? "Невідомий";
+            string unit = PromptDialog.ShowDialog("Введіть одиниці виміру (шт, кг, пак):", "Од. вим.") ?? "шт";
+
+            _products.Add(new Product(finalArticle, name, type, provider, unit, price, qty, DateTime.Now, false));
+            TxtSearch_TextChanged(null, EventArgs.Empty);
+            MessageBox.Show("Товар успішно додано!", "Успіх");
         }
 
-        private void BtnSale_Click(object sender, EventArgs e)
+        private void BtnSellProduct_Click(object? sender, EventArgs e)
         {
-            if (dgvProducts.SelectedRows.Count > 0)
+            if (dgvProducts.SelectedRows.Count == 0)
             {
-                var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
-                if (selectedProduct != null)
+                MessageBox.Show("Будь ласка, виберіть товар у таблиці.", "Увага", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
+            if (selectedProduct == null) return;
+
+            string qtyInput = PromptDialog.ShowDialog($"Введіть кількість для '{selectedProduct.Name}' (Доступно: {selectedProduct.Quantity}):", "Оформлення покупки");
+            if (!int.TryParse(qtyInput, out int quantity) || quantity <= 0)
+            {
+                MessageBox.Show("Некоректна кількість!", "Помилка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            int alreadyInCart = _cart.Where(x => x.Article == selectedProduct.Article).Sum(x => x.Quantity);
+            if (selectedProduct.Quantity < (quantity + alreadyInCart))
+            {
+                MessageBox.Show("Недостатньо товару на складі з урахуванням кошика!", "Помилка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var cartItem = selectedProduct.CloneForCart(quantity);
+            _cart.Add(cartItem);
+
+            DialogResult result = MessageBox.Show("Товар додано в чек. Бажаєте додати ще один товар? (Натисніть 'Так' для продовження обирання товару, 'Ні' для формування чека)", "Кошик", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (result == DialogResult.No)
+            {
+                decimal totalCheckSum = 0;
+                
+                try
                 {
-                    string qtyStr = PromptDialog.ShowDialog($"Сколько единиц товара '{selectedProduct.Name}' добавить в чек?", "Продажа");
-                    if (!int.TryParse(qtyStr, out int qty) || qty <= 0) return;
-
-                    int alreadyInCart = 0;
-                    var inCartProd = _cart.Find(p => p.Name == selectedProduct.Name);
-                    if (inCartProd != null) alreadyInCart = inCartProd.Quantity;
-
-                    if (qty + alreadyInCart > selectedProduct.Quantity)
+                    using (StreamWriter sw = new StreamWriter("check.txt", true))
                     {
-                        MessageBox.Show("Недостаточно товара на складе с учетом корзины!", "Ошибка");
-                        return;
-                    }
-
-                    if (inCartProd != null)
-                    {
-                        inCartProd.AddStock(qty);
-                    }
-                    else
-                    {
-                        // Используем специальный метод клонирования для корзины
-                        _cart.Add(selectedProduct.CloneForCart(qty));
-                    }
-
-                    DialogResult result = MessageBox.Show(
-                        "Товар добавлен в чек. Хотите добавить еще один товар?\n(Нажмите 'Да' для продолжения выбора, 'Нет' для закрытия чека)", 
-                        "Кассовый аппарат", 
-                        MessageBoxButtons.YesNo
-                    );
-
-                    if (result == DialogResult.No)
-                    {
-                        decimal totalCheckPrice = 0;
-                        string checkPath = "check.txt";
-
-                        using (StreamWriter writer = new StreamWriter(checkPath, false))
+                        sw.WriteLine($"--- ФІСКАЛЬНИЙ ЧЕК --- {DateTime.Now}");
+                        foreach (var item in _cart)
                         {
-                            writer.WriteLine("====== ФИСКАЛЬНЫЙ ЧЕК ======");
-                            writer.WriteLine($"Дата: {DateTime.Now}");
-                            writer.WriteLine("----------------------------");
-
-                            foreach (var item in _cart)
+                            var realProd = _products.FirstOrDefault(p => p.Article == item.Article);
+                            if (realProd != null)
                             {
-                                var stockProd = _products.Find(p => p.Name == item.Name);
-                                if (stockProd != null)
-                                {
-                                    // Объект сам уменьшает свое количество, проверяя валидность операции
-                                    stockProd.TrySell(item.Quantity);
-                                }
-
-                                decimal itemTotal = item.Price * item.Quantity;
-                                totalCheckPrice += itemTotal;
-
-                                writer.WriteLine($"{item.Name} - {item.Quantity} {item.Unit} x {item.Price:C} = {itemTotal:C}");
+                                realProd.TrySell(item.Quantity);
                             }
 
-                            writer.WriteLine("----------------------------");
-                            writer.WriteLine($"ИТОГО К ОПЛАТЕ: {totalCheckPrice:C}");
-                            writer.WriteLine("============================");
-                        }
+                            decimal itemSum = item.Price * item.Quantity;
+                            totalCheckSum += itemSum;
 
-                        _cart.Clear();
-                        dgvProducts.Refresh();
-                        MessageBox.Show($"Продажа оформлена! Чек сохранен в файл check.txt\nОбщая сумма: {totalCheckPrice:C}", "Успешно");
+                            sw.WriteLine($"Товар: {item.Name} | {item.Quantity} {item.Unit} x {item.Price} грн = {itemSum} грн.");
+                        }
+                        sw.WriteLine($"ЗАГАЛЬНА СУМА: {totalCheckSum} грн.");
+                        sw.WriteLine("---------------------------------------\n");
                     }
+
+                    MessageBox.Show($"Продаж оформлено! Чек збережено у файл \"check.txt\". Загальна сума: {totalCheckSum} грн", "Продаж", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Помилка запису чеку: {ex.Message}", "Помилка I/O", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+
+                _cart.Clear(); 
+                _bindingSource.ResetBindings(false);
             }
-            else
+        }
+
+        private void BtnDiscountOrDelete_Click(object? sender, EventArgs e)
+        {
+            if (dgvProducts.SelectedRows.Count == 0)
             {
-                MessageBox.Show("Выберите товар в таблице для продажи!", "Внимание");
+                MessageBox.Show("Виберіть товар для проведення уцінки або списання.", "Увага", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
+
+            var selectedProduct = dgvProducts.SelectedRows[0].DataBoundItem as Product;
+            if (selectedProduct == null) return;
+
+            DialogResult result = MessageBox.Show($"Ви бажаєте уцінити товар на 15 відсотків? (натисніть 'Так' для уцінки, 'Ні' для повного списання товару)", "Уцінка / Списання", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+
+            if (result == DialogResult.Yes)
+            {
+                selectedProduct.ApplyDiscount(15);
+                _bindingSource.ResetBindings(false);
+                MessageBox.Show($"Ціну товару '{selectedProduct.Name}' успішно знижено на 15%!", "Уцінка");
+            }
+            else if (result == DialogResult.No)
+            {
+                _products.Remove(selectedProduct);
+                TxtSearch_TextChanged(null, EventArgs.Empty); 
+                MessageBox.Show("Товар повністю списано (видалено з бази).", "Списання");
+            }
+        }
+
+        private void BtnInventory_Click(object? sender, EventArgs e)
+        {
+            int totalQuantity = _products.Sum(p => p.Quantity);
+            decimal totalValue = _products.Sum(p => p.Quantity * p.Price);
+
+            string report = $"--- ЗВІТ ІНВЕНТАРИЗАЦІЇ СКЛАДУ ---\n\n" +
+                            $"Загальна кількість позицій: {_products.Count}\n" +
+                            $"Сумарна кількість одиниць товару: {totalQuantity} шт/пак\n" +
+                            $"Загальна вартість усіх товарів на складі: {totalValue} грн.\n" +
+                            $"----------------------------------------";
+
+            MessageBox.Show(report, "Інвентаризація", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void dgvProducts_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+        {
+            var dataSourceList = _bindingSource.DataSource as List<Product>;
+            if (dataSourceList == null) return;
+
+            string columnName = dgvProducts.Columns[e.ColumnIndex].DataPropertyName;
+            if (string.IsNullOrEmpty(columnName)) return;
+
+            if (!_sortDirections.ContainsKey(columnName)) _sortDirections[columnName] = true;
+            else _sortDirections[columnName] = !_sortDirections[columnName];
+
+            bool isAscending = _sortDirections[columnName];
+
+            PropertyInfo? propertyInfo = typeof(Product).GetProperty(columnName);
+            if (propertyInfo == null) return;
+
+            if (isAscending) dataSourceList = dataSourceList.OrderBy(p => propertyInfo.GetValue(p, null)).ToList();
+            else dataSourceList = dataSourceList.OrderByDescending(p => propertyInfo.GetValue(p, null)).ToList();
+
+            _bindingSource.DataSource = dataSourceList;
+            _bindingSource.ResetBindings(false);
+        }
+
+        private void InitializeComponent()
+        {
+            this.dgvProducts = new System.Windows.Forms.DataGridView();
+            this.txtSearch = new System.Windows.Forms.TextBox();
+            this.lblSearch = new System.Windows.Forms.Label();
+            this.btnAddNewProduct = new System.Windows.Forms.Button();
+            this.btnSellProduct = new System.Windows.Forms.Button();
+            this.btnDiscountOrDelete = new System.Windows.Forms.Button();
+            this.btnInventory = new System.Windows.Forms.Button();
+            ((System.ComponentModel.ISupportInitialize)(this.dgvProducts)).BeginInit();
+            this.SuspendLayout();
+
+            this.dgvProducts.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dgvProducts.Location = new System.Drawing.Point(12, 50);
+            this.dgvProducts.Name = "dgvProducts";
+            this.dgvProducts.Size = new System.Drawing.Size(760, 240);
+            this.dgvProducts.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            this.dgvProducts.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            this.dgvProducts.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+                | System.Windows.Forms.AnchorStyles.Left) 
+                | System.Windows.Forms.AnchorStyles.Right)));
+
+            this.txtSearch.Location = new System.Drawing.Point(120, 15);
+            this.txtSearch.Name = "txtSearch";
+            this.txtSearch.Size = new System.Drawing.Size(250, 20);
+
+            this.lblSearch.Location = new System.Drawing.Point(12, 18);
+            this.lblSearch.Name = "lblSearch";
+            this.lblSearch.Size = new System.Drawing.Size(110, 20);
+            this.lblSearch.Text = "Швидкий пошук:";
+
+            this.btnAddNewProduct.Location = new System.Drawing.Point(12, 305);
+            this.btnAddNewProduct.Name = "btnAddNewProduct";
+            this.btnAddNewProduct.Size = new System.Drawing.Size(160, 35);
+            this.btnAddNewProduct.Text = "Додати новий товар";
+            this.btnAddNewProduct.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+
+            this.btnSellProduct.Location = new System.Drawing.Point(185, 305);
+            this.btnSellProduct.Name = "btnSellProduct";
+            this.btnSellProduct.Size = new System.Drawing.Size(160, 35);
+            this.btnSellProduct.Text = "Оформити продаж";
+            this.btnSellProduct.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+
+            this.btnDiscountOrDelete.Location = new System.Drawing.Point(360, 305);
+            this.btnDiscountOrDelete.Name = "btnDiscountOrDelete";
+            this.btnDiscountOrDelete.Size = new System.Drawing.Size(160, 35);
+            this.btnDiscountOrDelete.Text = "Уцінка / Списання";
+            this.btnDiscountOrDelete.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+
+            this.btnInventory.Location = new System.Drawing.Point(535, 305);
+            this.btnInventory.Name = "btnInventory";
+            this.btnInventory.Size = new System.Drawing.Size(160, 35);
+            this.btnInventory.Text = "Інвентаризація";
+            this.btnInventory.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+
+            this.ClientSize = new System.Drawing.Size(784, 355);
+            this.MinimumSize = new System.Drawing.Size(740, 350);
+            this.Controls.Add(this.btnInventory);
+            this.Controls.Add(this.btnDiscountOrDelete);
+            this.Controls.Add(this.btnSellProduct);
+            this.Controls.Add(this.btnAddNewProduct);
+            this.Controls.Add(this.lblSearch);
+            this.Controls.Add(this.txtSearch);
+            this.Controls.Add(this.dgvProducts);
+            this.Name = "Form1";
+            this.Text = "Магазин - Касовий апарат";
+            ((System.ComponentModel.ISupportInitialize)(this.dgvProducts)).EndInit();
+            this.ResumeLayout(false);
+            this.PerformLayout();
         }
     }
 }
